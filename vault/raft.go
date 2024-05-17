@@ -1222,10 +1222,10 @@ func (c *Core) raftLeaderInfo(leaderInfo *raft.LeaderJoinInfo, disco *discover.D
 			// default to HTTPS when no scheme is provided
 			scheme = "https"
 		}
-		port := leaderInfo.AutoJoinPort
-		if port == 0 {
+		defaultAutoJoinPort := leaderInfo.AutoJoinPort
+		if defaultAutoJoinPort == 0 {
 			// default to 8200 when no port is provided
-			port = 8200
+			defaultAutoJoinPort = 8200
 		}
 		// Addrs returns either IPv4 or IPv6 address, without scheme or port
 		clusterIPs, err := disco.Addrs(leaderInfo.AutoJoin, c.logger.StandardLogger(nil))
@@ -1233,6 +1233,17 @@ func (c *Core) raftLeaderInfo(leaderInfo *raft.LeaderJoinInfo, disco *discover.D
 			return nil, fmt.Errorf("failed to parse addresses from auto-join metadata: %w", err)
 		}
 		for _, ip := range clusterIPs {
+			// Avoid port being override by the below statement
+			port := defaultAutoJoinPort
+			// Fix auto_join port when using provider=mdns
+			hostStr, portStr, err := net.SplitHostPort(ip)
+			if err == nil {
+				ip = hostStr
+				tmpPort, err := strconv.Atoi(portStr)
+				if err == nil {
+					port = uint(tmpPort)
+				}
+			}
 			if strings.Count(ip, ":") >= 2 && !strings.HasPrefix(ip, "[") {
 				// An IPv6 address in implicit form, however we need it in explicit form to use in a URL.
 				ip = fmt.Sprintf("[%s]", ip)
